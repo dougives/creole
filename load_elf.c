@@ -8,53 +8,12 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <stdbool.h>
-#include <signal.h>
-
-#include <stdio.h>
 
 #include <elf.h>
 
-#define ELF_MAGIC 0x464c457f    // 0x7f + "ELF"
-#define ELF_PHOFF_32 0x34
-#define ELF_PHOFF_64 0x40
-#define INT3 ((uint8_t)0xcc)
+#include "load_elf.h"
 
-struct elf
-{
-    size_t map_length;
-    void *map;
-    void *base;
-    void *vaddr_start;
-    size_t file_length;
-    union
-    {   
-        void *file;
-        Elf32_Ehdr *e_hdr32;
-        Elf64_Ehdr *e_hdr64;
-    };
-    size_t phnum;
-    union
-    {   
-        void *e_pht;
-        Elf32_Phdr *e_pht32;
-        Elf64_Phdr *e_pht64;
-    };
-    size_t shnum;
-    union
-    {   
-        void *e_sht;
-        Elf32_Shdr *e_sht32;
-        Elf64_Shdr *e_sht64;
-    };
-    uint8_t class;
-};
-
-void int3(int signo)
-{
-    assert(false);
-}
-
-void validate_elf_header64(struct elf elf)
+static void validate_elf_header64(struct elf elf)
 {
     assert(elf.file_length >= sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr));
 
@@ -73,7 +32,7 @@ void validate_elf_header64(struct elf elf)
         + elf.e_hdr64->e_shnum * sizeof(Elf64_Shdr));
 }
 
-void validate_elf_header32(struct elf elf)
+static void validate_elf_header32(struct elf elf)
 {
     assert(elf.e_hdr32->e_entry);
     assert(elf.e_hdr32->e_phoff == ELF_PHOFF_32); // should follow elf header
@@ -90,7 +49,7 @@ void validate_elf_header32(struct elf elf)
         + elf.e_hdr32->e_shnum * sizeof(Elf32_Shdr));
 }
 
-void validate_elf_header(struct elf elf)
+static void validate_elf_header(struct elf elf)
 {
     assert(elf.file);
     assert(elf.file_length >= sizeof(Elf32_Ehdr) + sizeof(Elf32_Phdr));
@@ -118,7 +77,7 @@ void validate_elf_header(struct elf elf)
         : validate_elf_header64(elf);
 }
 
-struct elf validate_elf_pht64(struct elf elf)
+static struct elf validate_elf_pht64(struct elf elf)
 {
     bool found_pt_phdr= false;
     bool found_pt_interp = false;
@@ -177,7 +136,7 @@ struct elf validate_elf_pht64(struct elf elf)
     return elf;
 }
 
-struct elf validate_elf_pht32(struct elf elf)
+static struct elf validate_elf_pht32(struct elf elf)
 {    
     bool found_pt_phdr= false;
     bool found_pt_interp = false;
@@ -233,7 +192,7 @@ struct elf validate_elf_pht32(struct elf elf)
     return elf;
 }
 
-struct elf validate_elf_pht(struct elf elf)
+static struct elf validate_elf_pht(struct elf elf)
 {
     switch (elf.class)
     {
@@ -246,7 +205,7 @@ struct elf validate_elf_pht(struct elf elf)
     }
 }
 
-struct elf map_phdr64(struct elf elf, Elf64_Phdr phdr)
+static struct elf map_phdr64(struct elf elf, Elf64_Phdr phdr)
 {
     Elf64_Off offset = phdr.p_offset;
     // void *target = (void *)(phdr.p_vaddr - (uint64_t)elf.vaddr_start);
@@ -262,7 +221,7 @@ struct elf map_phdr64(struct elf elf, Elf64_Phdr phdr)
     return elf;
 }
 
-struct elf map_phdr32(struct elf elf, Elf32_Phdr phdr)
+static struct elf map_phdr32(struct elf elf, Elf32_Phdr phdr)
 {
     Elf32_Off offset = phdr.p_offset;
     // void *target = (void *)(phdr.p_vaddr - (uint64_t)elf.vaddr_start);
@@ -278,7 +237,7 @@ struct elf map_phdr32(struct elf elf, Elf32_Phdr phdr)
     return elf;
 }
 
-struct elf parse_elf_pht(struct elf elf)
+static struct elf parse_elf_pht(struct elf elf)
 {
     assert(elf.map_length);
     // portable anonymous mapping
@@ -318,7 +277,7 @@ struct elf parse_elf_pht(struct elf elf)
     return elf;
 }
 
-struct elf parse_elf(struct elf elf)
+static struct elf parse_elf(struct elf elf)
 {
     assert(elf.file);
     assert(elf.file_length);
@@ -345,7 +304,7 @@ struct elf parse_elf(struct elf elf)
     return elf;
 }
 
-struct elf read_elf(char *pathname)
+static struct elf read_elf(char *pathname)
 {
     assert(pathname);
     int fd = open(pathname, O_RDONLY);
@@ -422,10 +381,10 @@ struct elf load_elf(char *pathname)
     return elf;
 }
 
-int main(int argc, char **argv, char **env)
-{
-    assert(argc == 2);
-    signal(SIGTRAP, int3); // higher-lever (gdb) debugger overrides this
-    struct elf elf = load_elf(argv[1]);
-    return 0;
-}
+// int main(int argc, char **argv, char **env)
+// {
+//     assert(argc == 2);
+//     signal(SIGTRAP, int3); // higher-lever (gdb) debugger overrides this
+//     struct elf elf = load_elf(argv[1]);
+//     return 0;
+// }
