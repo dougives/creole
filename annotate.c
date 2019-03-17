@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include "load_elf.h"
+#include "xed/xed-interface.h"
 
 // struct impurity_table
 // {
@@ -148,6 +149,18 @@ int main(int argc, char** argv)
     struct elf elf = load_elf("hw");
     struct annotated_elf anno_elf = annotate_elf(elf);
     printf("%p\n", anno_elf.text_table->entries[0].start);
+
+    xed_tables_init();
+    xed_machine_mode_enum_t mmode = XED_MACHINE_MODE_LONG_64;
+    xed_address_width_enum_t stack_addr_width = XED_ADDRESS_WIDTH_64b;
+    xed_decoded_inst_t xedd;
+    xed_decoded_inst_zero(&xedd);
+    xed_decoded_inst_set_mode(&xedd, mmode, stack_addr_width);
+    xed_error_enum_t xed_error = xed_decode(
+        &xedd,
+        (const uint8_t *)"\xcc\x00\x00\xcc" + 1,
+        3);
+        
     return 0;
 }
 
