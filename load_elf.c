@@ -273,7 +273,7 @@ static struct elf parse_elf_pht(struct elf elf)
                 assert(false);
         }
     }
-    assert(false);
+    // assert(false);
     return elf;
 }
 
@@ -377,7 +377,7 @@ struct elf load_elf(char *pathname)
 {
     assert(pathname);
     struct elf elf = read_elf(pathname);
-    parse_elf(elf);
+    elf = parse_elf(elf);
     return elf;
 }
 
