@@ -9,7 +9,90 @@
 
 #include "load_elf.h"
 #include "annotate.h"
+#include "decoder.h"
 #include "xed/xed-interface.h"
+
+static void load_control_table(
+    struct elf elf,
+    struct text_table *text_table,
+    struct control_table **control_table)
+{
+    assert(!*control_table);
+    *control_table = calloc(1, sizeof(struct control_table));
+    assert(*control_table);
+    struct decoder *decoder = elf.class == ELFCLASS32
+        ? create_decoder(
+            XED_MACHINE_MODE_LONG_COMPAT_32, 
+            XED_ADDRESS_WIDTH_32b)
+        : create_decoder(
+            XED_MACHINE_MODE_LONG_64,
+            XED_ADDRESS_WIDTH_64b);
+    for (size_t i = 0; i < text_table->size; ++i)
+    {
+        struct text_table_entry text_table_entry = text_table->entries[i];
+        for (activate_decoder(decoder, text_table_entry.start);
+            decoder->inst_ptr + decoder->inst_length 
+                < text_table_entry.start + text_table_entry.length;
+            decode_next(decoder))
+        {
+            switch (decoder->inst_class)
+            {
+                // case XED_ICLASS_BOUND:
+                // case XED_ICLASS_INTO:
+                //     assert(elf.class == ELFCLASS32);
+                case XED_ICLASS_JB:
+                case XED_ICLASS_JBE:
+                case XED_ICLASS_JCXZ:
+                case XED_ICLASS_JECXZ:
+                case XED_ICLASS_JL:
+                case XED_ICLASS_JLE:
+                case XED_ICLASS_JMP:
+                case XED_ICLASS_JMP_FAR:
+                case XED_ICLASS_JNB:
+                case XED_ICLASS_JNBE:
+                case XED_ICLASS_JNL:
+                case XED_ICLASS_JNLE:
+                case XED_ICLASS_JNO:
+                case XED_ICLASS_JNP:
+                case XED_ICLASS_JNS:
+                case XED_ICLASS_JNZ:
+                case XED_ICLASS_JO:
+                case XED_ICLASS_JP:
+                case XED_ICLASS_JRCXZ:
+                case XED_ICLASS_JS:
+                case XED_ICLASS_JZ:
+                case XED_ICLASS_LOOP:
+                case XED_ICLASS_LOOPE:
+                case XED_ICLASS_LOOPNE:
+                case XED_ICLASS_CALL_FAR:
+                case XED_ICLASS_CALL_NEAR:
+                case XED_ICLASS_RET_FAR:
+                case XED_ICLASS_RET_NEAR:
+                    ++(*control_table)->size;
+                    *control_table = realloc(
+                        *control_table,
+                        sizeof(struct control_table)
+                            + sizeof(struct control_table_entry)
+                                * (*control_table)->size);
+                    assert(*control_table);
+                    (*control_table)->entries[(*control_table)->size - 1] =
+                        (struct control_table_entry)
+                    {
+                        .inst_ptr = decoder->inst_ptr,
+                        .inst_class = decoder->inst_class,
+                        .inst = decoder->xedd,
+                    };
+                    print_current_inst(decoder);
+                    continue;
+                default:
+                    continue;
+            }
+        }
+        reset_decoder(decoder);
+    }
+    free_decoder(decoder);
+    return;
+}
 
 static void find_text_segments(
     struct elf elf, 
@@ -25,7 +108,7 @@ static void find_text_segments(
         uint64_t type = 0;
         uint64_t flags = 0;
         size_t size = 0;
-        void *addr = NULL;
+        uint64_t addr = 0;
         char *name = NULL;
         switch (elf.class)
         {
@@ -33,14 +116,14 @@ static void find_text_segments(
                 type = elf.e_sht32[i].sh_type;
                 flags = elf.e_sht32[i].sh_flags;
                 size = elf.e_sht32[i].sh_size;
-                addr = (void *)(uint64_t)elf.e_sht32[i].sh_addr;
+                addr = elf.e_sht32[i].sh_addr;
                 name = string_table + elf.e_sht32[i].sh_name;
                 break;
             case ELFCLASS64:
                 type = elf.e_sht64[i].sh_type;
                 flags = elf.e_sht64[i].sh_flags;
                 size = elf.e_sht64[i].sh_size;
-                addr = (void *)(uint64_t)elf.e_sht64[i].sh_addr;
+                addr = elf.e_sht64[i].sh_addr;
                 name = string_table + elf.e_sht64[i].sh_name;
                 break;
             default:
@@ -65,7 +148,7 @@ static void find_text_segments(
             (struct text_table_entry)
         {
             .length = size,
-            .start = addr,
+            .start = elf.map + addr,
         };
     }
 }
@@ -116,26 +199,16 @@ struct annotated_elf annotate_elf(struct elf elf)
         anno_elf.elf, 
         anno_elf.string_table, 
         &anno_elf.text_table);
+    load_control_table(elf, anno_elf.text_table, &anno_elf.control_table);
     return anno_elf;
 }
 
-// int main(int argc, char** argv)
-// {
-//     struct elf elf = load_elf("hw");
-//     struct annotated_elf anno_elf = annotate_elf(elf);
-//     printf("%p\n", anno_elf.text_table->entries[0].start);
-// 
-//     xed_tables_init();
-//     xed_machine_mode_enum_t mmode = XED_MACHINE_MODE_LONG_64;
-//     xed_address_width_enum_t stack_addr_width = XED_ADDRESS_WIDTH_64b;
-//     xed_decoded_inst_t xedd;
-//     xed_decoded_inst_zero(&xedd);
-//     xed_decoded_inst_set_mode(&xedd, mmode, stack_addr_width);
-//     xed_error_enum_t xed_error = xed_decode(
-//         &xedd,
-//         (const uint8_t *)(elf.map + elf.e_hdr64->e_entry),
-//         15);
-//         
-//     return 0;
-// }
+int main(int argc, char** argv)
+{
+    struct elf elf = load_elf("hw");
+    struct annotated_elf anno_elf = annotate_elf(elf);
+    // printf("%p\n", anno_elf.text_table->entries[0].start);
+        
+    return 0;
+}
 

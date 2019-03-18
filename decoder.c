@@ -8,19 +8,8 @@
 #include "xed/xed-interface.h"
 #include "load_elf.h"
 #include "annotate.h"
+#include "decoder.h"
 
-struct decoder
-{
-    void *inst_ptr;
-    xed_iclass_enum_t inst_class;
-    xed_uint_t inst_length;
-    xed_machine_mode_enum_t mmode;
-    xed_address_width_enum_t stack_addr_width;
-    xed_error_enum_t xed_error;
-    xed_decoded_inst_t xedd;
-
-    xed_uint_t _inst_previous_length;
-};
 
 void reset_decoder(struct decoder *decoder)
 {
@@ -60,7 +49,7 @@ bool decoder_is_active(struct decoder *decoder)
     return (bool)decoder->inst_ptr;
 }
 
-void update_decoder(struct decoder *decoder)
+static void update_decoder(struct decoder *decoder)
 {
     decoder->inst_class = xed_decoded_inst_get_iclass(&decoder->xedd);
     decoder->_inst_previous_length = decoder->inst_length;
@@ -82,7 +71,7 @@ void activate_decoder(struct decoder *decoder, void *inst_ptr)
     return;
 }
 
-void decode_current(struct decoder *decoder)
+static void decode_current(struct decoder *decoder)
 {
     xed_decoded_inst_zero_keep_mode(&decoder->xedd);
     decoder->xed_error = xed_decode(
@@ -116,19 +105,19 @@ void print_current_inst(struct decoder *decoder)
     return;
 }
 
-int main(int argc, char **argv)
-{
-    struct elf elf = load_elf("hw");
-    // struct annotated_elf anno_elf = annotate_elf(elf);
-    struct decoder *decoder = create_decoder(
-        XED_MACHINE_MODE_LONG_64,
-        XED_ADDRESS_WIDTH_64b);
-    activate_decoder(decoder, elf.map + elf.e_hdr64->e_entry);
-    print_current_inst(decoder);
-    decode_next(decoder);
-    print_current_inst(decoder);
-    decode_next(decoder);
-    print_current_inst(decoder);
-    free_decoder(decoder);
-    return 0;
-}
+// int main(int argc, char **argv)
+// {
+//     struct elf elf = load_elf("hw");
+//     // struct annotated_elf anno_elf = annotate_elf(elf);
+//     struct decoder *decoder = create_decoder(
+//         XED_MACHINE_MODE_LONG_64,
+//         XED_ADDRESS_WIDTH_64b);
+//     activate_decoder(decoder, elf.map + elf.e_hdr64->e_entry);
+//     print_current_inst(decoder);
+//     decode_next(decoder);
+//     print_current_inst(decoder);
+//     decode_next(decoder);
+//     print_current_inst(decoder);
+//     free_decoder(decoder);
+//     return 0;
+// }

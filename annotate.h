@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 
+#include "xed/xed-interface.h"
 #include "load_elf.h"
 
 // struct impurity_table
@@ -10,8 +11,15 @@
 //     size_t aaa;
 // };
 
-struct branch_table
+struct control_table
 {
+    size_t size;
+    struct control_table_entry
+    {
+        void *inst_ptr;
+        xed_iclass_enum_t inst_class;
+        xed_decoded_inst_t inst;
+    } entries[];
 };
 
 struct text_table
@@ -29,6 +37,7 @@ struct annotated_elf
     struct elf elf;
     char *string_table;
     struct text_table *text_table;
+    struct control_table *control_table;
 };
 
 struct annotated_elf annotate_elf(struct elf elf);
