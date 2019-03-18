@@ -11,6 +11,12 @@
 //     size_t aaa;
 // };
 
+struct inst_bounds
+{
+    size_t size;
+    void *entries[];
+};
+
 struct control_table
 {
     size_t size;
@@ -38,6 +44,7 @@ struct annotated_elf
     char *string_table;
     struct text_table *text_table;
     struct control_table *control_table;
+    struct inst_bounds *inst_bounds;
 };
 
 struct annotated_elf annotate_elf(struct elf elf);
