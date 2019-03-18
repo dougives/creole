@@ -40,10 +40,30 @@ static void enumerate_insts(
     return;
 }
 
-static void find_inst_bounds(
-    struct elf elf,
-    struct text_table *text_table)
+static void find_inst_bounds_fn(
+    struct decoder *decoder,
+    struct annotated_elf *anno_elf)
 {
+    struct inst_bounds **inst_bounds = &anno_elf->inst_bounds;
+    ++(*inst_bounds)->size;
+    *inst_bounds = realloc(
+        *inst_bounds,
+        sizeof(struct inst_bounds)
+            + sizeof(void *) * (*inst_bounds)->size);
+    assert(*inst_bounds);
+    (*inst_bounds)->entries[(*inst_bounds)->size - 1] = decoder->inst_ptr;
+    print_current_inst(decoder);
+    return;
+}
+
+static void find_inst_bounds(struct annotated_elf *anno_elf)
+{
+    struct inst_bounds **inst_bounds = &anno_elf->inst_bounds;
+    assert(!*inst_bounds);
+    *inst_bounds = calloc(1, sizeof(struct inst_bounds));
+    assert(*inst_bounds);
+    enumerate_insts(find_inst_bounds_fn, anno_elf);
+    return;
 }
 
 static void load_control_table_fn(
@@ -98,15 +118,14 @@ static void load_control_table_fn(
                 .inst_class = decoder->inst_class,
                 .inst = decoder->xedd,
             };
-            print_current_inst(decoder);
+            // print_current_inst(decoder);
             return;
         default:
             return;
     }
 }
 
-static void load_control_table(
-    struct annotated_elf *anno_elf)
+static void load_control_table(struct annotated_elf *anno_elf)
 {
     struct control_table **control_table = &anno_elf->control_table;
     assert(!*control_table);
@@ -221,6 +240,7 @@ struct annotated_elf annotate_elf(struct elf elf)
         anno_elf.elf, 
         anno_elf.string_table, 
         &anno_elf.text_table);
+    find_inst_bounds(&anno_elf);
     load_control_table(&anno_elf);
     return anno_elf;
 }
